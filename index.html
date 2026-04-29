@@ -189,14 +189,20 @@ function render(idx){
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:12}}},y:{grid:{color:'rgba(0,0,0,0.06)'},ticks:{font:{size:12},callback:v=>fmtMs(v)}}}}
   });
 
-  if(errorChart) errorChart.destroy();
-  errorChart=new Chart(document.getElementById('errorChart'),{
-    type:'bar',
+  if(errorChart){errorChart.destroy();errorChart=null;}
+  const errorLabels = (idx===0 && d.subErrors && Object.keys(d.subErrors).length)
+    ? Object.keys(d.subErrors).map(function(k){ return k.replace(/_/g," "); })
+    : [label];
+  const errorValues = (idx===0 && d.subErrors && Object.keys(d.subErrors).length)
+    ? Object.values(d.subErrors)
+    : [d.errorCount||0];
+  errorChart=new Chart(document.getElementById("errorChart"),{
+    type:"bar",
     data:{
-      labels:AGENTS.map(a=>a.label),
-      datasets:[{label:'Errors',data:AGENTS.map(a=>allData[a.key]?.errorCount||0),backgroundColor:'#E24B4A',borderRadius:4}]
+      labels:errorLabels,
+      datasets:[{label:"Errors",data:errorValues,backgroundColor:"#E24B4A",borderRadius:4}]
     },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:12}}},y:{grid:{color:'rgba(0,0,0,0.06)'},ticks:{font:{size:12},stepSize:1}}}}
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:12}}},y:{grid:{color:"rgba(0,0,0,0.06)"},ticks:{font:{size:12},stepSize:1}}}}
   });
 
   const highestToken  =AGENTS.reduce((a,b)=>(allData[a.key]?.totalTokens||0)>(allData[b.key]?.totalTokens||0)?a:b);
