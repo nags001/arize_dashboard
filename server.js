@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
@@ -7,9 +8,13 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
+app.get('/config', (_req, res) => res.json({ apiKey: process.env.ARIZE_API_KEY || '' }));
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-const MODEL_ID = 'TW9kZWw6NjYxMDQ0NjIxNTpqZ1Yv';
+const MODEL_IDS = {
+  dev:   'TW9kZWw6NjYxMDQ0NjIxNTpqZ1Yv',
+  stage: 'TW9kZWw6NjY3OTkyNDIyNTpoZFdv',
+};
 
 const AGENT_FILTERS = {
   resort: { span: 'resort_exploration_agent', error: 'resort_exploration_agent' },
@@ -33,9 +38,10 @@ async function gql(apiKey, query) {
 }
 
 app.post('/api/arize/all', async (req, res) => {
-  const { apiKey, days = 7 } = req.body;
+  const { apiKey, days = 7, env = 'dev' } = req.body;
   if (!apiKey) return res.status(400).json({ error: 'apiKey is required.' });
 
+  const MODEL_ID = MODEL_IDS[env] || MODEL_IDS.dev;
   const endTime   = new Date().toISOString();
   const startTime = new Date(Date.now() - days * 86400 * 1000).toISOString();
   const base      = `startTime: "${startTime}", endTime: "${endTime}", environmentName: tracing, externalModelVersionIds: [], externalBatchIds: []`;
@@ -56,18 +62,15 @@ app.post('/api/arize/all', async (req, res) => {
       const latencies  = (spanRes.data?.node?.spanRecordsPublic?.edges || []).map(e => Math.round(e.node.latencyMs || 0));
       const errorCount = errRes.data?.node?.errors?.totalCount || 0;
 
-      console.log(`[${key}] latencies=${JSON.stringify(latencies)} errorCount=${errorCount}`);
       agentData[key] = { latencies, errorCount };
     }
 
     const totalAgentLatency = Object.values(agentData).flatMap(v => v.latencies).reduce((s, v) => s + v, 0);
-    console.log('totalAgentLatency:', totalAgentLatency);
 
     const agents = {};
     for (const [key, { latencies, errorCount }] of Object.entries(agentData)) {
       const latencyMs = latencies.reduce((s, v) => s + v, 0);
       const ratio     = totalAgentLatency > 0 ? latencyMs / totalAgentLatency : 0;
-      console.log(`[${key}] latencyMs=${latencyMs} ratio=${ratio}`);
 
       agents[key] = {
         totalTokens:      Math.round(totalTokens * ratio),
@@ -84,7 +87,6 @@ app.post('/api/arize/all', async (req, res) => {
     return res.json({ modelName: statsRes.data?.node?.name, agents });
 
   } catch (err) {
-    console.error('Error:', err);
     return res.status(500).json({ error: err.message });
   }
 });

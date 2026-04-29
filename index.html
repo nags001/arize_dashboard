@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Arize Token Dashboard</title>
+<title>AI Agent Observability Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -57,14 +57,21 @@ select{height:38px;padding:0 10px;border:0.5px solid rgba(0,0,0,0.18);border-rad
 <body>
 <div class="page">
   <div class="header">
-    <div><h1>Token usage — by agent</h1><p>Arize AX · Discovery_Agent_Dev</p></div>
+    <div><h1>AI Agent Observability Dashboard</h1><p>Arize AX · Discovery_Agent_Dev</p>
+      <p style="font-size:12px;color:#6b6b67;margin-top:3px;">A real-time observability dashboard that tracks token usage, latency, and error rates across your Disney vacation planning AI agents, powered by live Arize data.</p></div>
     <span class="badge" id="statusBadge">Not connected</span>
   </div>
   <div class="card">
     <label>Arize credentials</label>
     <div class="row">
       <input type="password" id="apiKey" placeholder="API key"/>
+      <select id="envSelect">
+        <option value="dev">Dev</option>
+        <option value="stage">Stage</option>
+      </select>
       <select id="timeRange">
+        <option value="1">Last 1 day</option>
+        <option value="3">Last 3 days</option>
         <option value="7">Last 7 days</option>
         <option value="14">Last 14 days</option>
         <option value="30">Last 30 days</option>
@@ -234,19 +241,22 @@ async function connectAll(){
   badge('Connecting…','');
   status('Fetching data from Arize…','loading');
   try{
-    const r=await fetch('/api/arize/all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apiKey,days:parseInt(days)})});
+    const r=await fetch('/api/arize/all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apiKey,days:parseInt(days),env:document.getElementById("envSelect").value})});
     const json=await r.json();
     if(json.error){status('Arize error: '+json.error,'err');badge('Error','error');return;}
     AGENTS.forEach(a=>{allData[a.key]=json.agents[a.key];});
     updateSubs();
     render(current);
     badge('Connected','connected');
-    status('Live data loaded. Token counts estimated by latency share.','ok');
+    const envLabel=document.getElementById('envSelect').options[document.getElementById('envSelect').selectedIndex].text;    document.querySelector('.header p').textContent='Arize AX · Discovery_Agent_'+envLabel;    status('Live data loaded. Token counts estimated by latency share.','ok');
   }catch(e){
     status('Network error: '+e.message,'err');
     badge('Error','error');
   }
 }
+
+// Auto-fill API key on load
+fetch("/config").then(r=>r.json()).then(function(c){ if(c.apiKey) document.getElementById("apiKey").value=c.apiKey; });
 
 function badge(t,c){const e=document.getElementById('statusBadge');e.textContent=t;e.className='badge '+c;}
 function status(t,c){const e=document.getElementById('statusBar');e.textContent=t;e.className=c;}
