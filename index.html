@@ -217,7 +217,30 @@ function render(idx){
     'High P99 latency often indicates large context windows, sequential tool calls, or slow downstream API responses. Consider parallelizing agent calls where possible.',
   ].map(function(s){return '<div class="summary-item">'+s+'</div>';}).join('');
 
+  // Show sub-errors for resort tab
+  const resortData = allData['resort'];
+  let subErrorHtml = '';
+  if (idx === 0 && resortData && resortData.subErrors && Object.keys(resortData.subErrors).length) {
+    const subLabels = {
+      'trip_preferences_extractor': 'Trip Preferences Extractor',
+      'resort_preferences_extractor': 'Resort Preferences Extractor',
+      'resort_match_summarizer': 'Resort Match Summarizer',
+    };
+    subErrorHtml = '<div class="summary-item"><strong>Resort sub-component errors:</strong><div style="margin-top:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px">' +
+      Object.entries(resortData.subErrors).map(function(e) {
+        const count = e[1];
+        const label = subLabels[e[0]] || e[0];
+        const color = count > 0 ? '#A32D2D' : '#3B6D11';
+        return '<div style="background:#f0efed;border-radius:8px;padding:10px;text-align:center">' +
+          '<div style="font-size:22px;font-weight:600;color:' + color + '">' + count + '</div>' +
+          '<div style="font-size:11px;color:#6b6b67;margin-top:3px">' + label + '</div>' +
+          '</div>';
+      }).join('') +
+      '</div></div>';
+  }
+
   document.getElementById('errorSummary').innerHTML=[
+    subErrorHtml,
     totalErrors===0
       ? '<strong>All agents are healthy</strong> — no ERROR spans detected in the selected time window.'
       : '<strong>'+totalErrors+' error span'+(totalErrors>1?'s':'')+' detected</strong> — '+highestError.label+' has the most with '+(allData[highestError.key]?.errorCount||0)+' errors.',
