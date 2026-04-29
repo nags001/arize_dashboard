@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Arize Token Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f3;color:#1a1a18;padding:2rem}
+.page{max-width:900px;margin:0 auto}
+.header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.75rem}
+.header h1{font-size:20px;font-weight:600;margin-bottom:3px}
+.header p{font-size:13px;color:#6b6b67}
+.badge{font-size:11px;font-weight:500;padding:4px 12px;border-radius:20px;background:#f0efed;color:#6b6b67;border:0.5px solid rgba(0,0,0,0.18)}
+.badge.connected{background:#eaf3de;color:#3B6D11;border-color:#C0DD97}
+.badge.error{background:#fcebeb;color:#A32D2D;border-color:#F7C1C1}
+.card{background:#fff;border:0.5px solid rgba(0,0,0,0.10);border-radius:14px;padding:1.25rem;margin-bottom:1rem}
+label{font-size:12px;color:#6b6b67;display:block;margin-bottom:5px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+input{flex:1;min-width:160px;height:38px;padding:0 12px;border:0.5px solid rgba(0,0,0,0.18);border-radius:10px;font-size:13px;color:#1a1a18;background:#f5f5f3;outline:none}
+input:focus{border-color:#378ADD}
+select{height:38px;padding:0 10px;border:0.5px solid rgba(0,0,0,0.18);border-radius:10px;font-size:13px;background:#f5f5f3;color:#1a1a18;cursor:pointer;outline:none}
+.btn{height:38px;padding:0 20px;border-radius:10px;border:0.5px solid rgba(0,0,0,0.18);font-size:13px;cursor:pointer;font-weight:500}
+.btn-primary{background:#378ADD;color:#fff;border-color:#378ADD}
+.btn-primary:hover{background:#2a75c9}
+.agent-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.5rem}
+.agent-tab{background:#fff;border:0.5px solid rgba(0,0,0,0.10);border-radius:14px;padding:14px 12px;cursor:pointer}
+.agent-tab:hover{border-color:rgba(0,0,0,0.18)}
+.agent-tab.active{border:1.5px solid #378ADD;background:#e6f1fb}
+.agent-tab .icon{font-size:18px;margin-bottom:8px}
+.agent-tab .name{font-size:13px;font-weight:500;line-height:1.3;margin-bottom:4px}
+.agent-tab .sub{font-size:11px;color:#6b6b67}
+.agent-tab.active .name{color:#185FA5}
+.agent-tab.active .sub{color:#185FA5}
+.metrics-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem}
+.metric{background:#f0efed;border-radius:10px;padding:1rem}
+.metric .lbl{font-size:12px;color:#6b6b67;margin-bottom:6px}
+.metric .val{font-size:26px;font-weight:600;color:#1a1a18}
+.metric .note{font-size:11px;color:#6b6b67;margin-top:4px}
+.card-title{font-size:14px;font-weight:500;margin-bottom:1rem}
+.legend{display:flex;gap:16px;margin-bottom:12px}
+.legend span{display:flex;align-items:center;gap:5px;font-size:12px;color:#6b6b67}
+.ldot{width:10px;height:10px;border-radius:2px}
+.chart-wrap{position:relative;height:220px;width:100%}
+.est-note{font-size:11px;color:#6b6b67;text-align:center;margin-top:8px}
+.summary-item{font-size:13px;color:#1a1a18;line-height:1.7;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,0.07)}
+.summary-item:last-child{border-bottom:none}
+.summary-item strong{font-weight:500}
+.hidden{display:none}
+#statusBar{font-size:12px;color:#6b6b67;text-align:center;padding:10px}
+#statusBar.err{color:#A32D2D}
+#statusBar.ok{color:#3B6D11}
+#statusBar.loading{color:#185FA5}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div><h1>Token usage — by agent</h1><p>Arize AX · Discovery_Agent_Dev</p></div>
+    <span class="badge" id="statusBadge">Not connected</span>
+  </div>
+  <div class="card">
+    <label>Arize credentials</label>
+    <div class="row">
+      <input type="password" id="apiKey" placeholder="API key"/>
+      <select id="timeRange">
+        <option value="7">Last 7 days</option>
+        <option value="14">Last 14 days</option>
+        <option value="30">Last 30 days</option>
+      </select>
+      <button class="btn btn-primary" onclick="connectAll()">Connect</button>
+    </div>
+  </div>
+  <div class="agent-grid">
+    <div class="agent-tab active" onclick="selectAgent(0)" id="tab-0"><div class="icon">🏨</div><div class="name">Resort Exploration</div><div class="sub" id="sub-0">— tokens</div></div>
+    <div class="agent-tab" onclick="selectAgent(1)" id="tab-1"><div class="icon">🎟</div><div class="name">Ticket Selector</div><div class="sub" id="sub-1">— tokens</div></div>
+    <div class="agent-tab" onclick="selectAgent(2)" id="tab-2"><div class="icon">💬</div><div class="name">Resort Q&amp;A</div><div class="sub" id="sub-2">— tokens</div></div>
+  </div>
+
+  <div id="dataSection" class="hidden">
+    <div class="metrics-row">
+      <div class="metric"><div class="lbl">Total tokens</div><div class="val" id="m-total">—</div><div class="note" id="m-total-note"></div></div>
+      <div class="metric"><div class="lbl">Prompt tokens</div><div class="val" id="m-prompt">—</div><div class="note" id="m-prompt-note"></div></div>
+      <div class="metric"><div class="lbl">Est. cost (USD)</div><div class="val" id="m-cost">—</div><div class="note">live from Arize</div></div>
+      <div class="metric"><div class="lbl">Latency share</div><div class="val" id="m-latency">—</div><div class="note" id="m-latency-note"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Token comparison — all agents</div>
+      <div class="legend">
+        <span><span class="ldot" style="background:#378ADD"></span>Prompt tokens</span>
+        <span><span class="ldot" style="background:#9FE1CB"></span>Completion tokens</span>
+      </div>
+      <div class="chart-wrap"><canvas id="tokenChart" role="img" aria-label="Token comparison chart"></canvas></div>
+      <div class="est-note">Token counts estimated proportionally based on latency share</div>
+    </div>
+    <div class="card">
+      <div class="card-title">What this tells you</div>
+      <div id="tokenSummary"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Latency — all agents (P99)</div>
+      <div class="legend">
+        <span><span class="ldot" style="background:#D85A30"></span>P99 latency (ms)</span>
+      </div>
+      <div class="chart-wrap"><canvas id="latencyChart" role="img" aria-label="P99 latency comparison chart"></canvas></div>
+      <div class="est-note">P99 latency per agent based on span execution time</div>
+    </div>
+    <div class="card">
+      <div class="card-title">What this tells you</div>
+      <div id="latencySummary"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Error count — all agents</div>
+      <div class="legend">
+        <span><span class="ldot" style="background:#E24B4A"></span>Error spans</span>
+      </div>
+      <div class="chart-wrap"><canvas id="errorChart" role="img" aria-label="Error count chart"></canvas></div>
+      <div class="est-note">Total spans with status ERROR per agent via Arize queryFilter</div>
+    </div>
+    <div class="card">
+      <div class="card-title">What this tells you</div>
+      <div id="errorSummary"></div>
+    </div>
+  </div>
+
+  <div id="statusBar">Enter your Arize API key and click Connect.</div>
+</div>
+<script>
+const AGENTS=[
+  {key:'resort', icon:'🏨', label:'Resort Exploration'},
+  {key:'ticket', icon:'🎟', label:'Ticket Selector'},
+  {key:'qa',     icon:'💬', label:'Resort Q&A'},
+];
+let allData={}, current=0, tokenChart=null, latencyChart=null, errorChart=null;
+function fmt(n){return n>=1e6?(n/1e6).toFixed(2)+'M':n>=1000?(n/1000).toFixed(1)+'k':n?n.toLocaleString():'0'}
+function fmtMs(n){return n>=1000?(n/1000).toFixed(2)+'s':Math.round(n)+'ms'}
+function fmtCost(n){return '$'+Number(n).toFixed(4)}
+function pct(a,b){return b?Math.round(a/b*100)+'%':'—'}
+
+function selectAgent(idx){
+  current=idx;
+  document.querySelectorAll('.agent-tab').forEach((t,i)=>t.classList.toggle('active',i===idx));
+  if(Object.keys(allData).length) render(idx);
+}
+
+function render(idx){
+  const d=allData[AGENTS[idx].key];
+  if(!d) return;
+  const label=AGENTS[idx].label;
+
+  document.getElementById('dataSection').classList.remove('hidden');
+
+  document.getElementById('m-total').textContent=fmt(d.totalTokens);
+  document.getElementById('m-prompt').textContent=fmt(d.promptTokens);
+  document.getElementById('m-cost').textContent=fmtCost(d.cost);
+  document.getElementById('m-total-note').textContent=pct(d.completionTokens,d.totalTokens)+' completion';
+  document.getElementById('m-prompt-note').textContent=pct(d.promptTokens,d.totalTokens)+' of total';
+  document.getElementById('m-latency').textContent=d.latencyRatio+'%';
+  document.getElementById('m-latency-note').textContent=(d.latencyMs/1000).toFixed(1)+'s total';
+
+  if(tokenChart) tokenChart.destroy();
+  tokenChart=new Chart(document.getElementById('tokenChart'),{
+    type:'bar',
+    data:{
+      labels:AGENTS.map(a=>a.label),
+      datasets:[
+        {label:'Prompt',     data:AGENTS.map(a=>allData[a.key]?.promptTokens||0),     backgroundColor:'#378ADD', borderRadius:4},
+        {label:'Completion', data:AGENTS.map(a=>allData[a.key]?.completionTokens||0), backgroundColor:'#9FE1CB', borderRadius:4},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:12}}},y:{grid:{color:'rgba(0,0,0,0.06)'},ticks:{font:{size:12},callback:v=>fmt(v)}}}}
+  });
+
+  if(latencyChart) latencyChart.destroy();
+  latencyChart=new Chart(document.getElementById('latencyChart'),{
+    type:'bar',
+    data:{
+      labels:AGENTS.map(a=>a.label),
+      datasets:[{label:'P99',data:AGENTS.map(a=>allData[a.key]?.latencyMsP99||0),backgroundColor:'#D85A30',borderRadius:4}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:12}}},y:{grid:{color:'rgba(0,0,0,0.06)'},ticks:{font:{size:12},callback:v=>fmtMs(v)}}}}
+  });
+
+  if(errorChart) errorChart.destroy();
+  errorChart=new Chart(document.getElementById('errorChart'),{
+    type:'bar',
+    data:{
+      labels:AGENTS.map(a=>a.label),
+      datasets:[{label:'Errors',data:AGENTS.map(a=>allData[a.key]?.errorCount||0),backgroundColor:'#E24B4A',borderRadius:4}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:12}}},y:{grid:{color:'rgba(0,0,0,0.06)'},ticks:{font:{size:12},stepSize:1}}}}
+  });
+
+  const highestToken  =AGENTS.reduce((a,b)=>(allData[a.key]?.totalTokens||0)>(allData[b.key]?.totalTokens||0)?a:b);
+  const highestLatency=AGENTS.reduce((a,b)=>(allData[a.key]?.latencyMsP99||0)>(allData[b.key]?.latencyMsP99||0)?a:b);
+  const highestError  =AGENTS.reduce((a,b)=>(allData[a.key]?.errorCount||0)>(allData[b.key]?.errorCount||0)?a:b);
+  const totalErrors   =AGENTS.reduce((s,a)=>s+(allData[a.key]?.errorCount||0),0);
+
+  document.getElementById('tokenSummary').innerHTML=[
+    '<strong>'+label+'</strong> used '+fmt(d.totalTokens)+' total tokens — '+pct(d.promptTokens,d.totalTokens)+' prompt and '+pct(d.completionTokens,d.totalTokens)+' completion.',
+    'Prompt tokens dominate because each call sends system instructions, retrieved context, and conversation history into the model. Completion tokens are small — the model writes short decisions or structured outputs in response.',
+    '<strong>Highest token usage:</strong> '+highestToken.label+' with '+fmt(allData[highestToken.key]?.totalTokens||0)+' tokens — likely sending the largest context window per call.',
+    '<strong>Cost opportunity:</strong> prompt token reduction has the most impact. Consider caching repeated system prompts or trimming context passed to each agent.',
+  ].map(function(s){return '<div class="summary-item">'+s+'</div>';}).join('');
+
+  document.getElementById('latencySummary').innerHTML=[
+    '<strong>P99 latency for '+label+':</strong> '+fmtMs(d.latencyMsP99||0)+' — meaning 99% of requests complete within this time.',
+    '<strong>Slowest agent overall:</strong> '+highestLatency.label+' at '+fmtMs(allData[highestLatency.key]?.latencyMsP99||0)+'. This is the most likely bottleneck in end-to-end response time.',
+    'High P99 latency often indicates large context windows, sequential tool calls, or slow downstream API responses. Consider parallelizing agent calls where possible.',
+  ].map(function(s){return '<div class="summary-item">'+s+'</div>';}).join('');
+
+  document.getElementById('errorSummary').innerHTML=[
+    totalErrors===0
+      ? '<strong>All agents are healthy</strong> — no ERROR spans detected in the selected time window.'
+      : '<strong>'+totalErrors+' error span'+(totalErrors>1?'s':'')+' detected</strong> — '+highestError.label+' has the most with '+(allData[highestError.key]?.errorCount||0)+' errors.',
+    '<strong>Resort Q&A</strong> has '+(allData['qa']?.errorCount||0)+' errors, <strong>Ticket Selector</strong> has '+(allData['ticket']?.errorCount||0)+', <strong>Resort Exploration</strong> has '+(allData['resort']?.errorCount||0)+'.',
+    'Error counts reflect spans explicitly marked ERROR in Arize. Check the Arize dashboard for stack traces and root cause details on failing spans.',
+    '<strong>Note:</strong> errors may be under-reported if your instrumentation catches exceptions silently without setting span status.',
+  ].map(function(s){return '<div class="summary-item">'+s+'</div>';}).join('');
+}
+
+function updateSubs(){
+  AGENTS.forEach((a,i)=>{
+    const d=allData[a.key];
+    document.getElementById('sub-'+i).textContent=d&&d.totalTokens?fmt(d.totalTokens)+' tokens':'— tokens';
+  });
+}
+
+async function connectAll(){
+  const apiKey=document.getElementById('apiKey').value.trim();
+  const days=document.getElementById('timeRange').value;
+  if(!apiKey){status('Please enter your API key.','err');return;}
+  badge('Connecting…','');
+  status('Fetching data from Arize…','loading');
+  try{
+    const r=await fetch('/api/arize/all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apiKey,days:parseInt(days)})});
+    const json=await r.json();
+    if(json.error){status('Arize error: '+json.error,'err');badge('Error','error');return;}
+    AGENTS.forEach(a=>{allData[a.key]=json.agents[a.key];});
+    updateSubs();
+    render(current);
+    badge('Connected','connected');
+    status('Live data loaded. Token counts estimated by latency share.','ok');
+  }catch(e){
+    status('Network error: '+e.message,'err');
+    badge('Error','error');
+  }
+}
+
+function badge(t,c){const e=document.getElementById('statusBadge');e.textContent=t;e.className='badge '+c;}
+function status(t,c){const e=document.getElementById('statusBar');e.textContent=t;e.className=c;}
+</script>
+</body>
+</html>
