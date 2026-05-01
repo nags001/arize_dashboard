@@ -79,8 +79,11 @@ app.post('/api/arize/all', async (req, res) => {
       const errorCount = errRes.data?.node?.errors?.totalCount || 0;
 
       const dayBuckets = {};
-      for (let i = 0; i < days; i++) {
-        const d = new Date(Date.now() - (days - 1 - i) * 86400 * 1000);
+      const bucketStart = new Date(Date.now() - days * 86400 * 1000);
+      bucketStart.setUTCHours(0, 0, 0, 0);
+      const bucketEnd = new Date();
+      bucketEnd.setUTCHours(0, 0, 0, 0);
+      for (let d = new Date(bucketStart); d <= bucketEnd; d = new Date(d.getTime() + 86400 * 1000)) {
         dayBuckets[d.toISOString().slice(0, 10)] = [];
       }
       for (const { latencyMs, date } of rawSpans) {
