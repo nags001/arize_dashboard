@@ -30,11 +30,13 @@ const AGENT_FILTERS = {
   qa:     { span: 'trip_preferences_extractor', error: 'resort_qa' },
 };
 
-function p99(values) {
+function percentile(values, p) {
   if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.max(0, Math.ceil(sorted.length * 0.99) - 1)];
+  return sorted[Math.max(0, Math.ceil(sorted.length * p) - 1)];
 }
+function p99(values) { return percentile(values, 0.99); }
+function p95(values) { return percentile(values, 0.95); }
 
 async function gql(apiKey, query) {
   const r = await fetch('https://app.arize.com/graphql', {
@@ -87,6 +89,7 @@ app.post('/api/arize/all', async (req, res) => {
       const latencyTimeSeries = Object.entries(dayBuckets).map(([date, vals]) => ({
         date,
         p99: vals.length ? p99(vals) : null,
+        p95: vals.length ? p95(vals) : null,
       }));
 
       // Fetch sub-component errors if defined
