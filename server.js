@@ -65,12 +65,29 @@ app.post('/api/arize/all', async (req, res) => {
     const agentData = {};
     for (const [key, f] of Object.entries(AGENT_FILTERS)) {
       const [spanRes, errRes] = await Promise.all([
-        gql(apiKey, `{ node(id: "${MODEL_ID}") { ... on Model { spanRecordsPublic(first: 25, dataset: { ${base}, queryFilter: "name LIKE '%${f.span}%'" }) { edges { node { latencyMs } } } } } }`),
+        gql(apiKey, `{ node(id: "${MODEL_ID}") { ... on Model { spanRecordsPublic(first: 50, dataset: { ${base}, queryFilter: "name LIKE '%${f.span}%'" }) { edges { node { latencyMs startTime } } } } } }`),
         gql(apiKey, `{ node(id: "${MODEL_ID}") { ... on Model { errors: spanRecordsPublic(first: 1, dataset: { ${base}, queryFilter: "name LIKE '%${f.error}%' AND status_code = 'ERROR'" }) { totalCount } } } }`),
       ]);
 
-      const latencies  = (spanRes.data?.node?.spanRecordsPublic?.edges || []).map(e => Math.round(e.node.latencyMs || 0));
+      const rawSpans = (spanRes.data?.node?.spanRecordsPublic?.edges || []).map(e => ({
+        latencyMs: Math.round(e.node.latencyMs || 0),
+        date: e.node.startTime ? e.node.startTime.slice(0, 10) : null,
+      }));
+      const latencies  = rawSpans.map(s => s.latencyMs);
       const errorCount = errRes.data?.node?.errors?.totalCount || 0;
+
+      const dayBuckets = {};
+      for (let i = 0; i < days; i++) {
+        const d = new Date(Date.now() - (days - 1 - i) * 86400 * 1000);
+        dayBuckets[d.toISOString().slice(0, 10)] = [];
+      }
+      for (const { latencyMs, date } of rawSpans) {
+        if (date && date in dayBuckets) dayBuckets[date].push(latencyMs);
+      }
+      const latencyTimeSeries = Object.entries(dayBuckets).map(([date, vals]) => ({
+        date,
+        p99: vals.length ? p99(vals) : null,
+      }));
 
       // Fetch sub-component errors if defined
       const subErrors = {};
@@ -81,13 +98,13 @@ app.post('/api/arize/all', async (req, res) => {
         }));
       }
 
-      agentData[key] = { latencies, errorCount, subErrors };
+      agentData[key] = { latencies, latencyTimeSeries, errorCount, subErrors };
     }
 
     const totalAgentLatency = Object.values(agentData).flatMap(v => v.latencies).reduce((s, v) => s + v, 0);
 
     const agents = {};
-    for (const [key, { latencies, errorCount, subErrors }] of Object.entries(agentData)) {
+    for (const [key, { latencies, latencyTimeSeries, errorCount, subErrors }] of Object.entries(agentData)) {
       const latencyMs = latencies.reduce((s, v) => s + v, 0);
       const ratio     = totalAgentLatency > 0 ? latencyMs / totalAgentLatency : 0;
 
@@ -99,6 +116,7 @@ app.post('/api/arize/all', async (req, res) => {
         latencyMs,
         latencyRatio:     parseFloat((ratio * 100).toFixed(1)),
         latencyMsP99:     p99(latencies),
+        latencyTimeSeries,
         errorCount,
         subErrors,
       };
